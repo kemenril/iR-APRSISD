@@ -1,0 +1,214 @@
+#!/usr/bin/python3
+
+############################################################################
+##
+## ir-aprsisd
+##
+##	This is a KML-feed to APRS-IS forwarding daemon.  It was written
+##	for Garmin/DeLorme inReach devices, but might work elsewhere too.
+##	It polls a KML feed in which it expects to find a point in rougly
+##	the form that the inReach online feeds use, with attendant course
+##	and altitude data.  It transfers each new point found there to 
+##	APRS-IS.
+##
+##	K0SIN
+##
+###########################################################################
+
+
+import aprslib
+import urllib.request
+import xml.dom.minidom
+import time, calendar, math, re
+import platform, sys
+import configparser
+from optparse import OptionParser
+
+
+#Name of our configuration file.
+cf = "ir-aprsisd.cfg"
+
+#Configuration
+conf = configparser.ConfigParser()
+#Try /etc, then try the current directory, or just quit.
+try:
+	conf.read("/etc/" + cf)
+	if not conf.has_section('General'):
+		conf.read(cf)
+	if not conf.has_section('General'):
+		sys.exit("Can't read configuration file: " + cf)
+except:
+	sys.exit("Can't read configuration file: " + cf)
+
+
+#Command-line options
+op = OptionParser()
+
+op.add_option("-s","--ssid",action="store",type="string",dest="ssid",help="APRS SSID")
+op.add_option("-p","--pass",action="store",type="int",dest="passwd",help="APRS-IS password")
+op.add_option("-P","--port",action="store",type="int",dest="port",help="APRS-IS port")
+op.add_option("-u","--user",action="store",type="string",dest="user",help="inReach username")
+op.add_option("-U","--url",action="store",type="string",dest="url",help="URL for KML feed")
+op.add_option("-c","--comment",action="store",type="string",dest="comment",help="APRS-IS location beacon comment text")
+op.add_option("-d","--delay",action="store",type="int",dest="delay",help="Delay between polls of KML feed")
+(opts,args) = op.parse_args()
+
+#Allow command-line arguments to override the config file.
+if opts.ssid:
+	conf['APRS']['SSID'] =		opts.ssid
+if opts.passwd:
+	conf['APRS']['Password'] =		str(opts.passwd)
+if opts.port:
+	conf['APRS']['Port'] =		str(opts.port)
+if opts.user:
+	conf['inReach']['User'] = 	opts.user
+if opts.url:
+	conf['inReach']['URL'] = 	opts.url
+if opts.comment:
+	conf['APRS']['Comment'] =	opts.comment
+if opts.delay:
+	conf['General']['Period'] =	opts.delay
+
+#The beginning of our APRS packets should contain a source, path, 
+# q construct, and gateway address.  We'll reuse the same SSID as a gate.
+ARPreamble	= ''.join([conf['APRS']['SSID'],'>APRS,','TCPIP*,','qAS,',conf['APRS']['SSID']])
+
+NAME		= "iR-APRSISD"
+REV		= "0.1"
+
+#Start with the current time.  We use this to keep track of whether we've
+# already sent a position, so if we cut it off when the program starts, we
+# won't (re-)send old stale entry from inReach
+lastUpdate	= calendar.timegm(time.gmtime())
+
+#Handle connection to APRS-IS
+def reconnect():
+	global AIS
+	while True:
+		AIS = aprslib.IS(conf['APRS']['SSID'],passwd=conf['APRS']['Password'],port=conf['APRS']['Port'])
+		try:
+			AIS.connect()
+			break
+		except Exception as e:
+			print("Trouble connecting to APRS-IS server.")
+			print(e)
+
+
+#APRS-IS Setup
+AIS = None
+reconnect()
+
+
+while True:
+	try:
+		KML = urllib.request.urlopen(conf['inReach']['URL']).read()
+	except Exception as e:
+		print(''.join(["Error reading URL: ", conf['inReach']['URL']]))
+		continue
+	try:
+		data = xml.dom.minidom.parseString(KML).documentElement
+		#The first placemark will have the expanded current location information.
+		position = data.getElementsByTagName('Placemark')[0]
+		
+		#Now process the extended data into something easier to handle.
+		extended = {}
+		for xd in position.getElementsByTagName('ExtendedData')[0].getElementsByTagName('Data'):
+			if not xd.getElementsByTagName('value')[0].firstChild == None:
+				extended[xd.getAttribute('name')] = xd.getElementsByTagName('value')[0].firstChild.nodeValue	
+	except Exception as e:
+		print(''.join(["Could not parse data from URL: ",conf['inReach']['URL']]))
+		continue
+
+	try:
+		#Here is the position vector
+		latitude	= extended['Latitude']
+		longitude	= extended['Longitude']
+		elevation	= extended['Elevation']
+		velocity	= extended['Velocity']
+		course		= extended['Course']
+		uttime		= extended['Time UTC']
+		device		= extended['Device Type']
+
+		#Some time conversions.  First the time struct.
+		ts = time.strptime(''.join([uttime," UTC"]),"%m/%d/%Y %I:%M:%S %p %Z")
+		#Unix epoch time for local record-keeping.
+		etime		= calendar.timegm(ts)
+		#MonthDayHoursMinutes_z for APRS-IS packet
+		aprstime	= time.strftime("%d%H%Mz",ts)
+
+		#Skip this one if it's old.
+		if lastUpdate > etime:
+			time.sleep(conf.getfloat('General','Period'))
+			continue
+
+		#Append the device type to the comment
+		conf['APRS']['Comment'] = ''.join([" ",conf['APRS']['Comment']," : ", NAME," v",REV," : ",platform.system()," on ",platform.machine()," : ",device])
+
+		#Latitude conversion
+		#We start with the truncated degrees, filled to two places
+		# then add fractional minutes two 2x2 digits.
+		latitude	= float(latitude)
+		aprslat		= str(abs(math.trunc(latitude))).zfill(2)
+		aprslat		+= '{:.02f}'.format(round((abs(latitude)-abs(math.trunc(latitude)))*60,2)).zfill(5)
+		if latitude > 0:
+			aprslat += "N"
+		else:
+			aprslat += "S"
+
+		#Longitude next.
+		longitude	= float(longitude)
+		aprslong	= str(abs(math.trunc(longitude))).zfill(3)
+		aprslong	+= '{:.02f}'.format(round((abs(longitude)-abs(math.trunc(longitude)))*60,2)).zfill(5)
+		if longitude > 0:
+			aprslong += "E"
+		else:
+			aprslong += "W"
+
+		#Altitude needs to be in feet above sea-level
+		# what we get instead is a string with a number of meters
+		# at the beginning.
+		aprsalt		= re.sub(r'^(\d+\.?\d+)\s*m.*',r'\1',elevation)
+		#We need integer feet, six digits
+		aprsalt		= str(round(float(aprsalt) * 3.2808399)).zfill(6)
+		aprsalt		= "/A=" + aprsalt[0:6]
+
+		#Aprs position
+		aprspos		= ''.join([aprslat,conf['APRS']['Separator'],aprslong,conf['APRS']['Symbol']])
+
+		#Course is already in degrees, so we just need to reformat it.
+		aprscourse = str(round(float(re.sub(r'(\d+\.?\d+).*',r'\1', course)))).zfill(3)
+
+		#Speed is in km/h.
+		aprsspeed = float(re.sub(r'(\d+\.?\d+).*',r'\1',velocity))*0.53995681
+		aprsspeed = str(min(round(aprsspeed),999)).zfill(3)
+
+		#Here's the course/speed combination
+		aprscs = ''.join([aprscourse,'/',aprsspeed])
+
+	except Exception as e:
+		print("Some relevant position vector data is missing or malformatted in this record.")
+		print(e)
+		#Pass?  Maybe...
+		pass
+	try:
+		#According to spec, one valid format for location beacons is
+		# @092345z/4903.50N/07201.75W>088/036
+		# with a comment on the end that can include altitude and other
+		# information.
+		aprsPacket = ''.join([ARPreamble,':@',aprstime,aprspos,aprscs,aprsalt,conf['APRS']['Comment']])
+		print(aprsPacket)
+		#This will throw an exception if the packet is somehow wrong.
+		aprslib.parse(aprsPacket)
+		AIS.sendall(aprsPacket)
+		lastUpdate = etime
+	except Exception as e:
+		print("Could not send the update: ")
+		if 'aprsPacket' in locals():
+			print(aprsPacket)
+		print(e)
+		print("Attempting reconnection, just in case.")
+		reconnect()
+		pass
+	time.sleep(conf.getfloat('General','Period'))
+
+
