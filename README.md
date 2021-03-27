@@ -25,10 +25,10 @@ This makes it possible to track an Iridium-based satellite device, say, on aprs.
  ```
  Then do these things:
  
-    * Edit the configuration file to contain your inReach username, your APRS SSID, and your APRS-IS passcode.  Make any other changes you see fit.  
+   * Edit the configuration file to contain your inReach username, your APRS SSID, and your APRS-IS passcode.  Make any other changes you see fit.  
  
-    * Optionally, install the config file in /etc.  You can otherwise leave it in the current directory.
+   * Optionally, install the config file in /etc.  You can otherwise leave it in the current directory.
  
-    * Run the daemon.  it should begin to scan your KML feed.
+   * Run the daemon.  it should begin to scan your KML feed.
  
  
