@@ -29,6 +29,6 @@ This makes it possible to track an Iridium-based satellite device, say, on aprs.
  
    * Optionally, install the config file in /etc.  You can otherwise leave it in the current directory.
  
-   * Run the daemon.  it should begin to scan your KML feed.
+   * Run the daemon.  It should begin to scan your KML feed.
  
  
