@@ -3,13 +3,13 @@
 
 ### Hwaet
 
-This is a KML-feed to APRS-IS forwarding daemon. It was written for Garmin/DeLorme inReach devices, but might work elsewhere too. It polls a KML feed in which it expects to find a point in rougly the form that the inReach online feeds use, with attendant course, speed, and elevation data. It synthesizes an APRS position report for each point found there, complete with course, speed, and elevation data, and sends it to APRS-IS.
+This is a KML-feed to APRS-IS forwarding daemon. It was written for Garmin/DeLorme inReach devices, but might work elsewhere too. It polls a KML feed in which it expects to find a point in rougly the form that the inReach online feeds use, with attendant course, speed, and elevation data. It synthesizes an APRS position report for each point found there, complete with course, speed, and elevation data, and sends it to APRS-IS.  If the packet came with an attached SMS message (this happens when you send a message to "mapshare" from your device), the text from that message is included in the APRS comment field.
  
 This makes it possible to track an Iridium-based satellite device, say, on aprs.fi with all of the amateur radio stuff.  All you need is a machine -- with the aprslib Python module installed -- attached to the internet to run the daemon, and a device that's publishing a KML feed.
 
 ### Set up of Garmin Mapshare
 
- Roughly, theKML feed is available on the "social" tab of your Garmin account.  You'll probably need to enable Mapshare.  You can set a password or not.  if you do set one, you well need to provide this password in the configuration file or on the command line to access your feed.  Once it's turned on, you can click the "feed" link to see the feed URL and a few other things.
+ In order to use this software, you must have a KML feed that gets location information from your device.  Garmin can be told to publish it for you if you have an inReach.  Roughly, the KML feed is available on the "social" tab of your Garmin account.  You'll probably need to enable Mapshare.  You can set a password or not.  if you do set one, you well need to provide this password in the configuration file or on the command line to access your feed.  Once it's turned on, you can click the "feed" link to see the feed URL and a few other things.
  
  ### Set up of the forwarding daemon
 
