@@ -108,7 +108,7 @@ urllib.request.install_opener(http)
 def reconnect():
 	global AIS
 	while True:
-		AIS = aprslib.IS(conf['APRS']['SSID'],passwd=int(conf['APRS']['Password']),port=int(conf['APRS']['Port'])))
+		AIS = aprslib.IS(conf['APRS']['SSID'],passwd=int(conf['APRS']['Password']),port=int(conf['APRS']['Port']))
 		try:
 			AIS.connect()
 			break
