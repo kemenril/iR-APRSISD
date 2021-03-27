@@ -239,7 +239,7 @@ while True:
 		print(aprsPacket)
 		#This will throw an exception if the packet is somehow wrong.
 		aprslib.parse(aprsPacket)
-		# AIS.sendall(aprsPacket)
+		AIS.sendall(aprsPacket)
 		lastUpdate = etime
 	except Exception as e:
 		print("Could not send the update: ")
