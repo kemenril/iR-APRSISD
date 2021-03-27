@@ -48,6 +48,7 @@ op.add_option("-s","--ssid",action="store",type="string",dest="ssid",help="APRS 
 op.add_option("-p","--pass",action="store",type="int",dest="passwd",help="APRS-IS password")
 op.add_option("-P","--port",action="store",type="int",dest="port",help="APRS-IS port")
 op.add_option("-u","--user",action="store",type="string",dest="user",help="inReach username")
+op.add_option("-i","--irpass",action="store",type="string",dest="irpass",help="inReach feed password")
 op.add_option("-U","--url",action="store",type="string",dest="url",help="URL for KML feed")
 op.add_option("-c","--comment",action="store",type="string",dest="comment",help="APRS-IS location beacon comment text")
 op.add_option("-d","--delay",action="store",type="int",dest="delay",help="Delay between polls of KML feed")
@@ -62,6 +63,8 @@ if opts.port:
 	conf['APRS']['Port'] =		str(opts.port)
 if opts.user:
 	conf['inReach']['User'] = 	opts.user
+if opts.irpass:
+	conf['inReach']['Password'] = 	opts.irpass
 if opts.url:
 	conf['inReach']['URL'] = 	opts.url
 if opts.comment:
@@ -80,6 +83,17 @@ REV		= "0.1"
 # already sent a position, so if we cut it off when the program starts, we
 # won't (re-)send old stale entry from inReach
 lastUpdate	= calendar.timegm(time.gmtime())
+
+#Set up the handler for HTTP connections
+if conf.has_option('inReach','Password'):
+	passman		= urllib.request.HTTPPasswordMgrWithDefaultRealm()
+	passman.add_password(None, conf['inReach']['URL'],'',conf['inReach']['Password'])
+	httpauth	= urllib.request.HTTPBasicAuthHandler(passman)
+	http		= urllib.request.build_opener(httpauth)
+else:
+	http		= urllib.request.build_opener()
+urllib.request.install_opener(http)
+
 
 #Handle connection to APRS-IS
 def reconnect():
@@ -101,7 +115,7 @@ reconnect()
 
 while True:
 	try:
-		KML = urllib.request.urlopen(conf['inReach']['URL']).read()
+		KML = http.open(conf['inReach']['URL']).read()
 	except Exception as e:
 		print(''.join(["Error reading URL: ", conf['inReach']['URL']]))
 		continue
@@ -129,6 +143,7 @@ while True:
 		uttime		= extended['Time UTC']
 		device		= extended['Device Type']
 
+
 		#Some time conversions.  First the time struct.
 		ts = time.strptime(''.join([uttime," UTC"]),"%m/%d/%Y %I:%M:%S %p %Z")
 		#Unix epoch time for local record-keeping.
@@ -141,8 +156,15 @@ while True:
 			time.sleep(conf.getfloat('General','Period'))
 			continue
 
-		#Append the device type to the comment
-		conf['APRS']['Comment'] = ''.join([" ",conf['APRS']['Comment']," : ", NAME," v",REV," : ",platform.system()," on ",platform.machine()," : ",device])
+		#If we have SMS data, add that.
+		if 'Text' in extended:
+			comment = extended['Text']
+		else:	#Default comment
+			comment = conf['APRS']['Comment']
+		comment = ''.join([" ", comment, " : ", NAME, " v", REV, " : ", platform.system(), " on ", platform.machine(), " : ", device])
+		#In the format we're using, APRS comments can be 36 characters
+		# ... but APRS-IS doesn't seem to care, so leave this off.
+		#comment = comment[:36]
 
 		#Latitude conversion
 		#We start with the truncated degrees, filled to two places
@@ -195,7 +217,7 @@ while True:
 		# @092345z/4903.50N/07201.75W>088/036
 		# with a comment on the end that can include altitude and other
 		# information.
-		aprsPacket = ''.join([ARPreamble,':@',aprstime,aprspos,aprscs,aprsalt,conf['APRS']['Comment']])
+		aprsPacket = ''.join([ARPreamble,':@',aprstime,aprspos,aprscs,aprsalt,comment])
 		print(aprsPacket)
 		#This will throw an exception if the packet is somehow wrong.
 		aprslib.parse(aprsPacket)
