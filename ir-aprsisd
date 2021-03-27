@@ -40,44 +40,53 @@ try:
 except:
 	sys.exit("Can't read configuration file: " + cf)
 
+#### TODO: EDB - add ability to use multiple inreach devices on command line
+# #Command-line options
+# op = OptionParser()
 
-#Command-line options
-op = OptionParser()
+# op.add_option("-s","--ssid",action="store",type="string",dest="ssid",help="APRS SSID")
+# op.add_option("-p","--pass",action="store",type="int",dest="passwd",help="APRS-IS password")
+# op.add_option("-P","--port",action="store",type="int",dest="port",help="APRS-IS port")
+# op.add_option("-u","--user",action="store",type="string",dest="user",help="inReach username")
+# op.add_option("-i","--irpass",action="store",type="string",dest="irpass",help="inReach feed password")
+# op.add_option("-U","--url",action="store",type="string",dest="url",help="URL for KML feed")
+# op.add_option("-c","--comment",action="store",type="string",dest="comment",help="APRS-IS location beacon comment text")
+# op.add_option("-d","--delay",action="store",type="int",dest="delay",help="Delay between polls of KML feed")
+# (opts,args) = op.parse_args()
 
-op.add_option("-s","--ssid",action="store",type="string",dest="ssid",help="APRS SSID")
-op.add_option("-p","--pass",action="store",type="int",dest="passwd",help="APRS-IS password")
-op.add_option("-P","--port",action="store",type="int",dest="port",help="APRS-IS port")
-op.add_option("-u","--user",action="store",type="string",dest="user",help="inReach username")
-op.add_option("-i","--irpass",action="store",type="string",dest="irpass",help="inReach feed password")
-op.add_option("-U","--url",action="store",type="string",dest="url",help="URL for KML feed")
-op.add_option("-c","--comment",action="store",type="string",dest="comment",help="APRS-IS location beacon comment text")
-op.add_option("-d","--delay",action="store",type="int",dest="delay",help="Delay between polls of KML feed")
-(opts,args) = op.parse_args()
+# #Allow command-line arguments to override the config file.
+# if opts.ssid:
+# 	conf['APRS']['SSID'] =		opts.ssid
+# if opts.passwd:
+# 	conf['APRS']['Password'] =		str(opts.passwd)
+# if opts.port:
+# 	conf['APRS']['Port'] =		str(opts.port)
+# if opts.user:
+# 	conf['inReach']['User'] = 	opts.user
+# if opts.irpass:
+# 	conf['inReach']['Password'] = 	opts.irpass
+# if opts.url:
+# 	conf['inReach']['URL'] = 	opts.url
+# if opts.comment:
+# 	conf['APRS']['Comment'] =	opts.comment
+# if opts.delay:
+# 	conf['General']['Period'] =	opts.delay
 
-#Allow command-line arguments to override the config file.
-if opts.ssid:
-	conf['APRS']['SSID'] =		opts.ssid
-if opts.passwd:
-	conf['APRS']['Password'] =		str(opts.passwd)
-if opts.port:
-	conf['APRS']['Port'] =		str(opts.port)
-if opts.user:
-	conf['inReach']['User'] = 	opts.user
-if opts.irpass:
-	conf['inReach']['Password'] = 	opts.irpass
-if opts.url:
-	conf['inReach']['URL'] = 	opts.url
-if opts.comment:
-	conf['APRS']['Comment'] =	opts.comment
-if opts.delay:
-	conf['General']['Period'] =	opts.delay
+
+# Setup number of devices in conf file. 
+num_devices  = len(conf['DEVICES'])
+NAME = "iR-APRSISD"
+REV = "0.1"
 
 #The beginning of our APRS packets should contain a source, path, 
 # q construct, and gateway address.  We'll reuse the same SSID as a gate.
-ARPreamble	= ''.join([conf['APRS']['SSID'],'>APRS,','TCPIP*,','qAS,',conf['APRS']['SSID']])
-
-NAME		= "iR-APRSISD"
-REV		= "0.1"
+#IF  you have multiple devices, determine device IMEI and preamble to use for each device. 
+# if there is only one device, it will setup 1 preamble just like the original version
+for i in range(1,num_devices+1):
+    #The beginning of our APRS packets should contain a source, path, 
+    # q construct, and gateway address.  We'll reuse the same SSID as a gate.
+    exec("ARPreamble_" + str(i) + " = ''.join([conf['APRS']['SSID_' + str(i)],'>APRS,','TCPIP*,','qAS,',conf['APRS']['SSID_' + str(i)]])  ") 
+    exec("DEVICE_" + str(i) + " = conf['DEVICES']['DEVICE_' + str(i)]")
 
 #Start with the current time.  We use this to keep track of whether we've
 # already sent a position, so if we cut it off when the program starts, we
@@ -99,7 +108,7 @@ urllib.request.install_opener(http)
 def reconnect():
 	global AIS
 	while True:
-		AIS = aprslib.IS(conf['APRS']['SSID'],passwd=conf['APRS']['Password'],port=conf['APRS']['Port'])
+		AIS = aprslib.IS(conf['APRS']['SSID'],passwd=int(conf['APRS']['Password']),port=int(conf['APRS']['Port'])))
 		try:
 			AIS.connect()
 			break
@@ -135,6 +144,7 @@ while True:
 
 	try:
 		#Here is the position vector
+
 		latitude	= extended['Latitude']
 		longitude	= extended['Longitude']
 		elevation	= extended['Elevation']
@@ -142,7 +152,15 @@ while True:
 		course		= extended['Course']
 		uttime		= extended['Time UTC']
 		device		= extended['Device Type']
+		
+		# EDB : add IMEI to compare with KML and determine which SSID / IMEI to use
+		imei 		= extended['IMEI']
 
+		# Determine which ARPreamble to use based on IMEI of device
+		for i in range(1,num_devices+1):
+			if imei == eval('DEVICE_' + str(i)):
+				ARPreamble = eval('ARPreamble_' + str(i))
+    
 
 		#Some time conversions.  First the time struct.
 		ts = time.strptime(''.join([uttime," UTC"]),"%m/%d/%Y %I:%M:%S %p %Z")
@@ -221,7 +239,7 @@ while True:
 		print(aprsPacket)
 		#This will throw an exception if the packet is somehow wrong.
 		aprslib.parse(aprsPacket)
-		AIS.sendall(aprsPacket)
+		# AIS.sendall(aprsPacket)
 		lastUpdate = etime
 	except Exception as e:
 		print("Could not send the update: ")
