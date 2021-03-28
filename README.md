@@ -1,7 +1,7 @@
 # iR-APRSISD
 ## Garmin/DeLorme inReach (or possibly other) KML feed to APRS-IS  forwarding daemon
 
-### Hwaet
+### Hwaet!
 
 This is a KML-feed to APRS-IS forwarding daemon. It was written for Garmin/DeLorme inReach devices, but might work elsewhere too. It polls a KML feed in which it expects to find a point in rougly the form that the inReach online feeds use, with attendant course, speed, and elevation data. It synthesizes an APRS position report for each point found there, complete with course, speed, and elevation data, and sends it to APRS-IS.  If the packet came with an attached SMS message (this happens when you send a message to "mapshare" from your device), the text from that message is included in the APRS comment field.
  
