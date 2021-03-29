@@ -64,6 +64,7 @@ else:	#Default behavior if no file specified.
 	if not loadConfig("/etc/" + cf):
 		if not loadConfig(cf):
 			print("Can't find default configuration: " + cf)
+			sys.exit(1)
 
 #Allow command-line arguments to override the config file.
 if opts.ssid:
@@ -98,7 +99,7 @@ SSNum = int(SSNum)
 #The beginning of our APRS packets should contain a source, path, 
 # q construct, and gateway address.  We'll reuse the same SSID as a gate.
 # This is the part between the source and the gate.
-ARPreamble	= ''.join(['>APRS,','TCPIP*,','qAS,'])
+ARPreamble	= ''.join(['>APRS,','TCPIP*,','qAS,',conf['APRS']['SSID']])
 
 NAME		= "iR-APRSISD"
 REV		= "0.2"
@@ -263,7 +264,7 @@ def sendAPRS(Placemark):
 		# @092345z/4903.50N/07201.75W>088/036
 		# with a comment on the end that can include altitude and other
 		# information.
-		aprsPacket = ''.join([getSSID(IMEI),ARPreamble,getSSID(IMEI),':@',aprstime,aprspos,aprscs,aprsalt,comment])
+		aprsPacket = ''.join([getSSID(IMEI),ARPreamble,':@',aprstime,aprspos,aprscs,aprsalt,comment])
 		#This will throw an exception if the packet is somehow wrong.
 		aprslib.parse(aprsPacket)
 		AIS.sendall(aprsPacket)
