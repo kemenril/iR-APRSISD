@@ -31,4 +31,17 @@ This makes it possible to track an Iridium-based satellite device, say, on aprs.
  
    * Run the daemon.  It should begin to scan your KML feed.
  
- 
+### Multiple inReach devices
+
+Some preliminary but untested support is now included for multiple inReach devices on the same feed.  There are a few strategies for dealing with multiple devices:
+
+   * Just define a single SSID in the configuration file, leave the Devices section undefined, and the software will increment the number on your SSID for each new IMEI it finds in the feed.  Mappings generated this way will be consistent within a single run, but may -- or may not -- change if you run the service again.
+
+   * Still define the SSID in the APRS section, since it's used for the login to APRS-IS, but also define the Devices section.  Each line should have an SSID = IMEI mapping.  All devices not present in the Devices section will be ignored.
+
+   * Run multiple instances of the daemon, each with an IMEI specified on the command-line, or each with a new configuration file and a Devices section that includes some but not all of the devices you want to watch.
+
+If you have multiple inReach devices, try doing any one of the above, and if my guesses about the KML feed behavior are correct, they should all be accessible.
+
+
+
