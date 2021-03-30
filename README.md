@@ -9,7 +9,7 @@ This makes it possible to track an Iridium-based satellite device, say, on aprs.
 
 ### Set up of Garmin Mapshare
 
- In order to use this software, you must have a KML feed that gets location information from your device.  Garmin can be told to publish it for you if you have an inReach.  Roughly, the KML feed is available on the "social" tab of your Garmin account.  You'll probably need to enable Mapshare.  You can set a password or not.  if you do set one, you well need to provide this password in the configuration file or on the command line to access your feed.  Once it's turned on, you can click the "feed" link to see the feed URL and a few other things.
+ In order to use this software, you must have a KML feed that gets location information from your device.  Garmin can be told to publish it for you if you have an inReach.  Roughly, the KML feed is available on the "social" tab of your Garmin account.  You'll probably need to enable Mapshare.  You can set a password or not.  if you do set one, you will need to provide this password in the configuration file or on the command line to access your feed.  Once it's turned on, you can click the "feed" link to see the feed URL and a few other things.
  
  ### Set up of the forwarding daemon
 
@@ -23,6 +23,7 @@ This makes it possible to track an Iridium-based satellite device, say, on aprs.
  ```
  pip install aprslib
  ```
+
  Then do these things:
  
    * Edit the configuration file to contain your inReach username, your APRS SSID, and your APRS-IS passcode.  Make any other changes you see fit.  
