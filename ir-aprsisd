@@ -151,7 +151,6 @@ def getSSID(DID):
 	#If we have a Devices section, the SSID list is static.
 	if DID not in SSIDList:
 		if conf.has_section('Devices'):
-			print("No device mapping")
 			return None
 		SSIDList[DID] = ''.join([Call,"-",str(SSNum)])
 		SSNum = SSNum + 1
@@ -228,7 +227,7 @@ def getEvents():
 	try:
 		KML = http.open(conf['inReach']['URL']).read()
 	except Exception as e:
-		print(''.join(["Error reading URL: ", conf['inReach']['URL']]))
+		print("Error reading URL: " + conf['inReach']['URL'])
 		return None
 	try:
 		data = xml.dom.minidom.parseString(KML).documentElement
