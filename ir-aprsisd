@@ -102,13 +102,7 @@ SSNum = int(SSNum)
 ARPreamble	= ''.join(['>APRS,','TCPIP*,','qAS,',conf['APRS']['SSID']])
 
 NAME		= "iR-APRSISD"
-REV		= "0.2"
-
-#Start with the current time.  We use this to keep track of whether we've
-# already sent a position, so if we cut it off when the program starts, we
-# won't (re-)send old stale entry from inReach
-#lastUpdate	= calendar.timegm(time.gmtime())
-
+REV		= "0.3"
 
 #Set up the handler for HTTP connections
 if conf.has_option('inReach','Password'):
@@ -131,41 +125,50 @@ def reconnect():
 		except Exception as e:
 			print("Trouble connecting to APRS-IS server.")
 			print(e)
+			time.sleep(3)
+			continue
 
-#We'll store the IMEI to ssid mapping here.
+#We'll store the device to ssid mapping here.
 SSIDList = {}
 #We'll store timestamps here
 lastUpdate = {}
 
-#Load any preconfigured IMEI mappings
+#Load any preconfigured mappings
 if conf.has_section('Devices'):
 	for device in conf['Devices'].keys():
 		SSIDList[conf['Devices'][device]] = device.upper()
 		
 
 #Get an SSID
-def getSSID(IMEI):
+#An apocryphal concern is that this will happily generate an SSID for None,
+#	or whatever else might get passed along to it.
+# There's a record in the usual set of inReach Placemarks where this happens,
+# but because the record has no extended data, no packets are ever generated
+# for it. Such a record is generally not interesting and on the end of the list,
+# so there has been no reason to explicitly skip it.
+def getSSID(DID):
 	global lastUpdate, SSIDList, SSNum, Call
 	#If we have a Devices section, the SSID list is static.
-	if IMEI not in SSIDList:
+	if DID not in SSIDList:
 		if conf.has_section('Devices'):
+			print("No device mapping")
 			return None
-		SSIDList[IMEI] = ''.join([Call,"-",str(SSNum)])
+		SSIDList[DID] = ''.join([Call,"-",str(SSNum)])
 		SSNum = SSNum + 1
 	#Add a timestamp on the first call
 	# This prevents us from redelivering an old message, which can stay
 	# in the feed.
-	if IMEI not in lastUpdate:
-		lastUpdate[IMEI] = calendar.timegm(time.gmtime())
-	return SSIDList[IMEI]
+	if DID not in lastUpdate:
+		lastUpdate[DID] = calendar.timegm(time.gmtime())
+	return SSIDList[DID]
 
 
 #APRS-IS Setup
 AIS = None
 reconnect()
 
-#Generate an APRS packet from a Placemark
-def sendAPRS(Placemark):
+#Get information from a Placemark
+def parsePlacemark(Placemark):
 	#We only care about the Placemarks with the ExtendedData sections.
 	if not Placemark.getElementsByTagName('ExtendedData'):
 		return None
@@ -175,125 +178,145 @@ def sendAPRS(Placemark):
 	for xd in Placemark.getElementsByTagName('ExtendedData')[0].getElementsByTagName('Data'):
 		if not xd.getElementsByTagName('value')[0].firstChild == None:
 			extended[xd.getAttribute('name')] = xd.getElementsByTagName('value')[0].firstChild.nodeValue	
-	try:
-		#Here is the position vector
-		latitude	= extended['Latitude']
-		longitude	= extended['Longitude']
-		elevation	= extended['Elevation']
-		velocity	= extended['Velocity']
-		course		= extended['Course']
-		uttime		= extended['Time UTC']
-		device		= extended['Device Type']
-		IMEI		= extended['IMEI']
-		SSID		= getSSID(IMEI)
 
-		#If there's no valid SSID mapping, we don't process this one.
-		if not SSID:
-			return None
+	#Make sure the device mapping is good.
+	if not 'IMEI' in extended:
+		return None
+	if not getSSID(extended['IMEI']):
+		return None
 
-		#Some time conversions.  First the time struct.
-		ts = time.strptime(''.join([uttime," UTC"]),"%m/%d/%Y %I:%M:%S %p %Z")
-		#Unix epoch time for local record-keeping.
-		etime		= calendar.timegm(ts)
-		#MonthDayHoursMinutes_z for APRS-IS packet
-		aprstime	= time.strftime("%d%H%Mz",ts)
+	#Now build the position vector
+	latitude	= None
+	longitude	= None
+	elevation	= None
+	velocity	= None
+	course		= None
+	uttime		= None
+	device		= None
+	IMEI		= extended['IMEI']
 
-		#Skip this one if it's old.
-		if lastUpdate[IMEI] > etime:
-			time.sleep(conf.getfloat('General','Period'))
-			return None
-
-		#If we have SMS data, add that.
-		if 'Text' in extended:
-			comment = extended['Text']
-		else:	#Default comment
-			comment = conf['APRS']['Comment']
-		comment = ''.join([" ", comment, " : ", NAME, " v", REV, " : ", platform.system(), " on ", platform.machine(), " : ", device])
-		#In the format we're using, APRS comments can be 36 characters
-		# ... but APRS-IS doesn't seem to care, so leave this off.
-		#comment = comment[:36]
-
-		#Latitude conversion
-		#We start with the truncated degrees, filled to two places
-		# then add fractional minutes two 2x2 digits.
-		latitude	= float(latitude)
-		aprslat		= str(abs(math.trunc(latitude))).zfill(2)
-		aprslat		+= '{:.02f}'.format(round((abs(latitude)-abs(math.trunc(latitude)))*60,2)).zfill(5)
-		if latitude > 0:
-			aprslat += "N"
-		else:
-			aprslat += "S"
-
-		#Longitude next.
-		longitude	= float(longitude)
-		aprslong	= str(abs(math.trunc(longitude))).zfill(3)
-		aprslong	+= '{:.02f}'.format(round((abs(longitude)-abs(math.trunc(longitude)))*60,2)).zfill(5)
-		if longitude > 0:
-			aprslong += "E"
-		else:
-			aprslong += "W"
-
+	if 'Latitude' in extended and 'Longitude' in extended:
+		latitude	= float(extended['Latitude'])
+		longitude	= float(extended['Longitude'])
+	if 'Elevation' in extended:
 		#Altitude needs to be in feet above sea-level
 		# what we get instead is a string with a number of meters
 		# at the beginning.
-		aprsalt		= re.sub(r'^(\d+\.?\d+)\s*m.*',r'\1',elevation)
-		#We need integer feet, six digits
-		aprsalt		= str(round(float(aprsalt) * 3.2808399)).zfill(6)
-		aprsalt		= "/A=" + aprsalt[0:6]
+		elevation       = re.sub(r'^(\d+\.?\d+)\s*m.*',r'\1',extended['Elevation'])
+		elevation       = float(elevation) * 3.2808399
+	if 'Velocity' in extended:
+		#Velocity in knots, according to APRS.
+		velocity	= float(re.sub(r'(\d+\.?\d+).*',r'\1', extended['Velocity']))*0.5399568
+	if 'Course' in extended:
+		#... and the course is just a heading in degrees.
+		course		= float(re.sub(r'(\d+\.?\d+).*',r'\1', extended['Course']))
+	uttime		= time.strptime(extended['Time UTC'] + " UTC","%m/%d/%Y %I:%M:%S %p %Z")
+	device		= extended['Device Type']
 
-		#Aprs position
-		aprspos		= ''.join([aprslat,conf['APRS']['Separator'],aprslong,conf['APRS']['Symbol']])
+	#If we have SMS data, add that.
+	if 'Text' in extended:
+		comment = extended['Text']
+	else:	#Default comment
+		comment = conf['APRS']['Comment']
 
-		#Course is already in degrees, so we just need to reformat it.
-		aprscourse = str(round(float(re.sub(r'(\d+\.?\d+).*',r'\1', course)))).zfill(3)
+	return [device,IMEI,ARPreamble,uttime,latitude,longitude,elevation,course,velocity,comment]
 
-		#Speed is in km/h.
-		aprsspeed = float(re.sub(r'(\d+\.?\d+).*',r'\1',velocity))*0.53995681
-		aprsspeed = str(min(round(aprsspeed),999)).zfill(3)
-
-		#Here's the course/speed combination
-		aprscs = ''.join([aprscourse,'/',aprsspeed])
-
-	except Exception as e:
-		print("Some relevant position vector data is missing or malformatted in this record.")
-		print(e)
-		#Pass?  Maybe...
-		pass
-	try:
-		#According to spec, one valid format for location beacons is
-		# @092345z/4903.50N/07201.75W>088/036
-		# with a comment on the end that can include altitude and other
-		# information.
-		aprsPacket = ''.join([getSSID(IMEI),ARPreamble,':@',aprstime,aprspos,aprscs,aprsalt,comment])
-		#This will throw an exception if the packet is somehow wrong.
-		aprslib.parse(aprsPacket)
-		AIS.sendall(aprsPacket)
-		lastUpdate[IMEI] = etime
-		return aprsPacket
-
-	except Exception as e:
-		print("Could not send the update: ")
-		if 'aprsPacket' in locals():
-			print(aprsPacket)
-		print(e)
-		print("Attempting reconnection, just in case.")
-		reconnect()
-		pass
-
-while True:
+#Return a list of all events available.  Each one is a list of arguments
+# for the below sendAPRS function
+def getEvents():
+	events = []
 	try:
 		KML = http.open(conf['inReach']['URL']).read()
 	except Exception as e:
 		print(''.join(["Error reading URL: ", conf['inReach']['URL']]))
-		continue
+		return None
 	try:
 		data = xml.dom.minidom.parseString(KML).documentElement
 	except Exception as e:
 		print("Can't process KML feed on this pass.")
-		continue
+		return None
 	#The first placemark will have the expanded current location information.
 	for PM in data.getElementsByTagName('Placemark'):
-		sendAPRS(PM)
+		res = parsePlacemark(PM)
+		if res:
+			events.append(res)
+	return events
+
+#Compile and send an APRS packet from the given information
+#According to spec, one valid format for location beacons is
+# @092345z/4903.50N/07201.75W>088/036
+# with a comment on the end that can include altitude and other
+# information.
+## Arguments are:
+#	Device type, Device ID, APRS Preamble, struct Timestamp, float Latitude
+#	float Longitude, float Altitude in feet, int float course in degrees,
+#	float speed in knots, comment
+def sendAPRS(device, DevID, ARPreamble, tstamp, lat, long, alt, course, speed, comment):
+	global		conf
+	etime		= calendar.timegm(tstamp)
+
+	#Latitude conversion
+	#We start with the truncated degrees, filled to two places
+	# then add fractional minutes two 2x2 digits.
+	slat		= str(abs(math.trunc(lat))).zfill(2)
+	slat		+= '{:.02f}'.format(round((abs(lat)-abs(math.trunc(lat)))*60,2)).zfill(5)
+	if lat > 0:
+		slat += "N"
+	else:
+		slat += "S"
+
+	#Longitude        
+	slong	= str(abs(math.trunc(long))).zfill(3)
+	slong	+= '{:.02f}'.format(round((abs(long)-abs(math.trunc(long)))*60,2)).zfill(5)
+	if long > 0:
+		slong += "E"
+	else:
+		slong += "W"
+
+   
+	pos		= ''.join([slat,conf['APRS']['Separator'],slong,conf['APRS']['Symbol']])
+	gateInfo	= ''.join([" ", comment, " : ", NAME, " v", REV, " : ", platform.system(), " on ", platform.machine(), " : "])
+	
+	if device:
+		gateInfo = gateInfo + device
+
+	#In the format we're using, APRS comments can be 36 characters
+	# ... but APRS-IS doesn't seem to care, so leave this off.
+	#comment	= comment[:36]
+
+	aprsPacket	= ''.join([getSSID(DevID),ARPreamble, ':@', time.strftime("%d%H%Mz",tstamp), pos]) 
+
+	#Check to make sure the update is new:
+	if lastUpdate[DevID] > etime:
+		return None
+
+	#In theory a course/speed of 000/000 sholdn't be much different
+	# from not reporting one, but also in theory, more space is 
+	# available for a comment if we don't add the data extension.
+	if speed and course:
+		aprsPacket	= ''.join([aprsPacket,str(round(course)).zfill(3), '/', str(min(round(speed),999)).zfill(3)])
+	#Same with altitude:
+	if alt:
+		#We need six digits of altitude.
+		aprsPacket	= aprsPacket + "/A=" + str(round(alt)).zfill(6)[0:6]
+	# Regardless:
+	aprsPacket		= aprsPacket + comment + gateInfo
+	try:
+		aprslib.parse(aprsPacket)	# For syntax
+		AIS.sendall(aprsPacket)
+	except Exception as e:
+		print("Could not send APRS packet: ")
+		print(aprsPacket)
+		print("Attempting reconnect just in case.")
+		reconnect()
+		pass
+	#Last update in UTC
+	lastUpdate[DevID]	= calendar.timegm(tstamp)
+
+#... and here is the main loop.
+while True:
+	for packet in getEvents():
+		sendAPRS(*packet)	#Otherwise a list of sendAPRS args for the next packet to send.
 	time.sleep(conf.getfloat('General','Period'))
 
 
