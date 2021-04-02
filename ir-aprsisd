@@ -20,7 +20,7 @@ import aprslib
 import urllib.request
 import xml.dom.minidom
 import time, calendar, math, re
-import platform, sys
+import platform, sys, signal
 import configparser
 from optparse import OptionParser
 
@@ -41,7 +41,17 @@ op.add_option("-U","--url",action="store",type="string",dest="url",help="URL for
 op.add_option("-i","--imei",action="store",type="int",dest="imei",help="This instance should watch *only* for the single IMEI given in this option.  For a more complicated mapping, use the Device section in the configuration file.")
 op.add_option("-c","--comment",action="store",type="string",dest="comment",help="APRS-IS location beacon comment text")
 op.add_option("-d","--delay",action="store",type="int",dest="delay",help="Delay between polls of KML feed")
+op.add_option("--genpass",action="store_true",dest="genpass",help="Generate the correct passcode for the SSID given in the configuration, or on the command line, print it, and exit.")
 (opts,args) = op.parse_args()
+
+#Handle term and int signals
+def trapexit(_signo,_stack_frame):
+	print()
+	print("Exiting.")
+	sys.exit(0)
+
+signal.signal(signal.SIGTERM,trapexit)
+signal.signal(signal.SIGINT,trapexit)
 
 #This needs to be defined before the load below happens.
 #Load a configuration file, and try to validate that it is loaded.
@@ -83,6 +93,16 @@ if opts.comment:
 	conf['APRS']['Comment'] =	opts.comment
 if opts.delay:
 	conf['General']['Period'] =	opts.delay
+
+#SSID should be standardized to upper-case.
+conf['APRS']['SSID'] = conf['APRS']['SSID'].upper()
+
+#Running in passcode generator mode.
+if opts.genpass:
+	print("Using SSID: " + conf['APRS']['SSID'])
+	print("The passcode is: " + str(aprslib.passcode(conf['APRS']['SSID'])))
+	print()
+	sys.exit(0)
 
 
 #Handle the special case where we've specified an IMEI on the command-line
