@@ -32,6 +32,14 @@ This makes it possible to track an Iridium-based satellite device, say, on aprs.
  
    * Run the daemon.  It should begin to scan your KML feed.
  
+ *Note:* I thought about just automatically calculating a password rather than requiring it in the configuration, but this would be pretty catastrophic in case of typographical errors.  If you don't already have the correct passcode, there -s a command-line option, *--genpass*, that will calculate it for you.  At least this way, the software will print the SSID for which you've asked it to generate a code back to you, and you're likely to notice if it's not actually yours.  Hopefully this prevents me from encouraging people to use SSIDs which should be assigned to other stations.  You can generate a passcode like this:
+ 
+ ```
+ ir-aprsisd --genpass --ssid N0CALL-66
+ ```
+ 
+ If you leave out the ssid option, a passcode will be generated for the SSID in the APRS section of the configuration file.
+ 
 ### Multiple inReach devices
 
 Some preliminary but untested support is now included for multiple inReach devices on the same feed.  There are a few strategies for dealing with multiple devices:
