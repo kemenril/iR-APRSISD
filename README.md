@@ -46,7 +46,7 @@ Some preliminary but untested support is now included for multiple inReach devic
 
    * Just define a single SSID in the configuration file, leave the Devices section undefined, and the software will increment the number on your SSID for each new IMEI it finds in the feed.  Mappings generated this way will be consistent within a single run, but may -- or may not -- change if you run the service again.
 
-   * Still define the SSID in the APRS section, since it's used for the login to APRS-IS, but also define the Devices section.  Each line should have an SSID = IMEI mapping.  All devices not present in the Devices section will be ignored.
+   * Still define the SSID in the APRS section, since it's used for the APRS gate address and the login to APRS-IS, but also define the Devices section.  Each line should have an SSID = IMEI mapping.  All devices not present in the Devices section will be ignored.
 
    * Run multiple instances of the daemon, each with an IMEI specified on the command-line, or each with a new configuration file and a Devices section that includes some but not all of the devices you want to watch.
 
