@@ -294,7 +294,7 @@ def sendAPRS(device, DevID, ARPreamble, tstamp, lat, long, alt, course, speed, c
 
    
 	pos		= ''.join([slat,conf['APRS']['Separator'],slong,conf['APRS']['Symbol']])
-	gateInfo	= ''.join([" ", comment, " : ", NAME, " v", REV, " : ", platform.system(), " on ", platform.machine(), " : "])
+	gateInfo	= ''.join([" : ", NAME, " v", REV, " : ", platform.system(), " on ", platform.machine(), " : "])
 	
 	if device:
 		gateInfo = gateInfo + device
