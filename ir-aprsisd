@@ -20,7 +20,7 @@ import aprslib
 import urllib.request
 import xml.dom.minidom
 import time, calendar, math, re
-import platform, sys, signal
+import platform, sys, os, signal
 import configparser
 from optparse import OptionParser
 
@@ -60,6 +60,7 @@ def loadConfig(cfile):
 	conf = configparser.ConfigParser()
 	if conf.read(cfile):
 		if conf.has_section('General'):
+			print("Loaded configuration: " + cfile)
 			return True
 	return False
 
@@ -71,10 +72,11 @@ if opts.config:
 		print("Can't load configuration: " + opts.config)
 		sys.exit(1)
 else:	#Default behavior if no file specified.
-	if not loadConfig("/etc/" + cf):
-		if not loadConfig(cf):
-			print("Can't find default configuration: " + cf)
-			sys.exit(1)
+	if not loadConfig(os.path.join("/etc", cf)):
+		if not loadConfig(os.path.join(os.path.dirname(os.path.abspath(__file__)),cf)):
+			if not loadConfig(cf):
+				print("Can't find configuration: " + cf)
+				sys.exit(1)
 
 #Allow command-line arguments to override the config file.
 if opts.ssid:
@@ -137,14 +139,15 @@ urllib.request.install_opener(http)
 #Handle connection to APRS-IS
 def reconnect():
 	global AIS
+	attempt = 1
 	while True:
 		AIS = aprslib.IS(conf['APRS']['SSID'],passwd=conf['APRS']['Password'],port=conf['APRS']['Port'])
 		try:
 			AIS.connect()
 			break
 		except Exception as e:
-			print("Trouble connecting to APRS-IS server.")
-			print(e)
+			print("Connection failed.  Reconnecting: " + str(attempt))
+			attempt += 1
 			time.sleep(3)
 			continue
 
@@ -153,32 +156,39 @@ SSIDList = {}
 #We'll store timestamps here
 lastUpdate = {}
 
+#Packet counts here
+transmitted = {}
+#Last time stats() was run:
+lastStats = calendar.timegm(time.gmtime())
+
+
 #Load any preconfigured mappings
 if conf.has_section('Devices'):
+	print("Loading predefined SSID mappings.")
 	for device in conf['Devices'].keys():
 		SSIDList[conf['Devices'][device]] = device.upper()
+		print("Static mapping: " + SSIDList[conf['Devices'][device]] + " -> " + device.upper())
 		
 
 #Get an SSID
-#An apocryphal concern is that this will happily generate an SSID for None,
-#	or whatever else might get passed along to it.
-# There's a record in the usual set of inReach Placemarks where this happens,
-# but because the record has no extended data, no packets are ever generated
-# for it. Such a record is generally not interesting and on the end of the list,
-# so there has been no reason to explicitly skip it.
 def getSSID(DID):
-	global lastUpdate, SSIDList, SSNum, Call
+	global lastUpdate, SSIDList, transmitted, SSNum, Call
+	if not DID:	# Don't map None
+		return None
 	#If we have a Devices section, the SSID list is static.
 	if DID not in SSIDList:
 		if conf.has_section('Devices'):
 			return None
 		SSIDList[DID] = ''.join([Call,"-",str(SSNum)])
 		SSNum = SSNum + 1
+		print("Mapping: " + DID + " -> " + SSIDList[DID])
 	#Add a timestamp on the first call
 	# This prevents us from redelivering an old message, which can stay
 	# in the feed.
 	if DID not in lastUpdate:
 		lastUpdate[DID] = calendar.timegm(time.gmtime())
+	if DID not in transmitted:
+		transmitted[DID] = 0
 	return SSIDList[DID]
 
 
@@ -271,7 +281,7 @@ def getEvents():
 #	float Longitude, float Altitude in feet, int float course in degrees,
 #	float speed in knots, comment
 def sendAPRS(device, DevID, ARPreamble, tstamp, lat, long, alt, course, speed, comment):
-	global		conf
+	global		conf, transmitted
 	etime		= calendar.timegm(tstamp)
 
 	#Latitude conversion
@@ -331,11 +341,26 @@ def sendAPRS(device, DevID, ARPreamble, tstamp, lat, long, alt, course, speed, c
 		pass
 	#Last update in UTC
 	lastUpdate[DevID]	= calendar.timegm(tstamp)
+	transmitted[DevID]	+= 1
+
+def stats():
+	global transmitted, lastStats
+	lastStats = calendar.timegm(time.gmtime())
+	print("----------------Packet Forwarding Summary----------------")
+	print("|\t" + time.strftime("%Y-%m-%d %R",time.localtime()))
+	print("| SSID		DevID			Packets forwarded")
+	for device in transmitted:
+		print("| " + getSSID(device) + "\t" + device + "\t\t" + str(transmitted[device]))
+	print("---------------------------------------------------------")
+	print()
 
 #... and here is the main loop.
 while True:
 	for packet in getEvents():
 		sendAPRS(*packet)	#Otherwise a list of sendAPRS args for the next packet to send.
+	if "Logstats" in conf["General"]:
+		if calendar.timegm(time.gmtime()) > lastStats + conf.getint("General","Logstats"):
+			stats()
 	time.sleep(conf.getfloat('General','Period'))
 
 
