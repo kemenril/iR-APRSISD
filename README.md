@@ -42,7 +42,7 @@ This makes it possible to track an Iridium-based satellite device, say, on aprs.
  
 ### Multiple inReach devices
 
-Support is now included for multiple inReach devices on the same feed.  There are a few strategies for dealing with multiple devices.  I do not have a way to test it on my own, but it has been tested and I'm told it works.  I will do my best not to break it in an update.  Here's how you use it:
+Support is now included for multiple inReach devices on the same feed.  There are a few strategies for dealing with multiple devices.  I do not have a way to test it on my own, but it has been tested and I'm told it works.  I will do my best not to break it in an update.  You can do any one of the following things:
 
    * Just define a single SSID in the configuration file, leave the Devices section undefined, and the software will increment the number on your SSID for each new IMEI it finds in the feed.  Mappings generated this way will be consistent within a single run, but may -- or may not -- change if you run the service again.
 
