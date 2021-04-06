@@ -281,7 +281,7 @@ def getEvents():
 #	float Longitude, float Altitude in feet, int float course in degrees,
 #	float speed in knots, comment
 def sendAPRS(device, DevID, ARPreamble, tstamp, lat, long, alt, course, speed, comment):
-	global		conf, transmitted
+	global		conf, transmitted, lastUpdate
 	etime		= calendar.timegm(tstamp)
 
 	#Latitude conversion
