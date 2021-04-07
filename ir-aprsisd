@@ -258,12 +258,12 @@ def getEvents():
 		KML = http.open(conf['inReach']['URL']).read()
 	except Exception as e:
 		print("Error reading URL: " + conf['inReach']['URL'])
-		return None
+		return events
 	try:
 		data = xml.dom.minidom.parseString(KML).documentElement
 	except Exception as e:
 		print("Can't process KML feed on this pass.")
-		return None
+		return events
 	#The first placemark will have the expanded current location information.
 	for PM in data.getElementsByTagName('Placemark'):
 		res = parsePlacemark(PM)
@@ -316,7 +316,7 @@ def sendAPRS(device, DevID, ARPreamble, tstamp, lat, long, alt, course, speed, c
 	aprsPacket	= ''.join([getSSID(DevID),ARPreamble, ':@', time.strftime("%d%H%Mz",tstamp), pos]) 
 
 	#Check to make sure the update is new:
-	if lastUpdate[DevID] > etime:
+	if not etime > lastUpdate[DevID]:
 		return None
 
 	#In theory a course/speed of 000/000 sholdn't be much different
