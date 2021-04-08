@@ -333,15 +333,16 @@ def sendAPRS(device, DevID, ARPreamble, tstamp, lat, long, alt, course, speed, c
 	try:
 		aprslib.parse(aprsPacket)	# For syntax
 		AIS.sendall(aprsPacket)
+		#If the above doesn't raise an exception, we should assume we've sent the packet.
+		lastUpdate[DevID] = calendar.timegm(tstamp)
+		transmitted[DevID] += 1
+		print("Sent: " + aprsPacket)
 	except Exception as e:
 		print("Could not send APRS packet: ")
 		print(aprsPacket)
 		print("Attempting reconnect just in case.")
 		reconnect()
-		pass
-	#Last update in UTC
-	lastUpdate[DevID]	= calendar.timegm(tstamp)
-	transmitted[DevID]	+= 1
+		return None
 
 def stats():
 	global transmitted, lastStats
