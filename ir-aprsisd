@@ -309,10 +309,6 @@ def sendAPRS(device, DevID, ARPreamble, tstamp, lat, long, alt, course, speed, c
 	if device:
 		gateInfo = gateInfo + device
 
-	#In the format we're using, APRS comments can be 36 characters
-	# ... but APRS-IS doesn't seem to care, so leave this off.
-	#comment	= comment[:36]
-
 	aprsPacket	= ''.join([getSSID(DevID),ARPreamble, ':@', time.strftime("%d%H%Mz",tstamp), pos]) 
 
 	#Check to make sure the update is new:
@@ -327,9 +323,18 @@ def sendAPRS(device, DevID, ARPreamble, tstamp, lat, long, alt, course, speed, c
 	#Same with altitude:
 	if alt:
 		#We need six digits of altitude.
-		aprsPacket	= aprsPacket + "/A=" + str(round(alt)).zfill(6)[0:6]
-	# Regardless:
-	aprsPacket		= aprsPacket + comment + gateInfo
+		comment = "/A=" + str(round(alt)).zfill(6)[0:6] + comment
+
+	#Regardless:
+	comment = comment + gateInfo
+
+	#We have the whole comment in one place now.
+	#In the format we're using, APRS comments can be 36 characters
+        # ... but APRS-IS doesn't seem to care, so leave this off.
+        #comment        = comment[:36]
+
+	aprsPacket		= aprsPacket + comment
+
 	try:
 		aprslib.parse(aprsPacket)	# For syntax
 		AIS.sendall(aprsPacket)
