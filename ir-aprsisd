@@ -318,7 +318,7 @@ def sendAPRS(device, DevID, ARPreamble, tstamp, lat, long, alt, course, speed, c
 	#In theory a course/speed of 000/000 sholdn't be much different
 	# from not reporting one, but also in theory, more space is 
 	# available for a comment if we don't add the data extension.
-	if speed and course:
+	if (speed != None) and (course != None):
 		aprsPacket	= ''.join([aprsPacket,str(round(course)).zfill(3), '/', str(min(round(speed),999)).zfill(3)])
 	#Same with altitude:
 	if alt:
