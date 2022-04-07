@@ -231,7 +231,7 @@ def parsePlacemark(Placemark):
 		#Altitude needs to be in feet above sea-level
 		# what we get instead is a string with a number of meters
 		# at the beginning.
-		elevation       = re.sub(r'^(\d+\.?\d+)\s*m.*',r'\1',extended['Elevation'])
+		elevation       = re.sub(r'^(-?\d+\.?\d+)\s*m.*',r'\1',extended['Elevation'])
 		elevation       = float(elevation) * 3.2808399
 	if 'Velocity' in extended:
 		#Velocity in knots, according to APRS.
